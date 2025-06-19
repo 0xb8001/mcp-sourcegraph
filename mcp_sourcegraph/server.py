@@ -31,7 +31,10 @@ from mcp.types import (
 from pydantic import BaseModel, Field
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 class SourcegraphClient:
@@ -170,15 +173,19 @@ class SourcegraphClient:
                 data = response.json()
                 
                 if "errors" in data:
+                    logger.error(f"GraphQL errors: {data['errors']}")
                     raise Exception(f"GraphQL errors: {data['errors']}")
                     
                 return data["data"]["search"]
                 
-            except httpx.TimeoutException:
+            except httpx.TimeoutException as e:
+                logger.error(f"Search timeout after {timeout} seconds: {e}")
                 raise Exception(f"Search timeout after {timeout} seconds")
             except httpx.HTTPError as e:
+                logger.error(f"HTTP error during search: {e}")
                 raise Exception(f"HTTP error: {e}")
             except Exception as e:
+                logger.error(f"Unexpected error during search: {e}", exc_info=True)
                 raise Exception(f"Search failed: {e}")
 
 # Initialize the MCP server
@@ -280,8 +287,16 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         raise ValueError("Query parameter is required")
         
     pattern_type = arguments.get("pattern_type", "keyword")
-    count = arguments.get("count", 10)
-    timeout = arguments.get("timeout", 10)
+    
+    try:
+        count = int(arguments.get("count", 10))
+        timeout = int(arguments.get("timeout", 10))
+    except (ValueError, TypeError) as e:
+        error_msg = f"Invalid parameter types - count: {arguments.get('count')}, timeout: {arguments.get('timeout')}"
+        logger.error(error_msg, exc_info=True)
+        raise ValueError(f"Invalid parameter types: {e}")
+    
+    logger.info(f"Search: '{query[:50]}{'...' if len(query) > 50 else ''}' [count={count}, timeout={timeout}s]")
     
     try:
         results = await sourcegraph_client.search(
@@ -290,6 +305,10 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
             count=count,
             timeout=timeout
         )
+        
+        # Log search completion
+        result_count = len(results.get("results", {}).get("results", []))
+        logger.info(f"Search completed: {result_count} results returned")
         
         # Format results for LLM consumption
         output_lines = []
@@ -402,7 +421,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         return [TextContent(type="text", text="\n".join(output_lines))]
         
     except Exception as e:
-        logger.error(f"Search failed: {e}")
+        logger.error(f"Tool handler failed for query '{query[:30]}{'...' if len(query) > 30 else ''}': {e}", exc_info=True)
         return [TextContent(type="text", text=f"Search failed: {str(e)}")]
 
 async def main():
@@ -417,22 +436,33 @@ async def main():
         logger.error("SOURCEGRAPH_TOKEN environment variable is required")
         raise ValueError("SOURCEGRAPH_TOKEN environment variable is required")
     
-    sourcegraph_client = SourcegraphClient(base_url, access_token)
-    logger.info(f"Initialized Sourcegraph client for {base_url}")
+    try:
+        sourcegraph_client = SourcegraphClient(base_url, access_token)
+        logger.info(f"MCP Sourcegraph server started - {base_url}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Sourcegraph client: {e}", exc_info=True)
+        raise
     
     # Run the server
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="sourcegraph",
-                server_version="0.1.3",
-                capabilities=ServerCapabilities(
-                    tools=ToolsCapability()
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            logger.info("MCP server running, waiting for requests...")
+            await server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="sourcegraph",
+                    server_version="0.1.3",
+                    capabilities=ServerCapabilities(
+                        tools=ToolsCapability()
+                    )
                 )
             )
-        )
+    except KeyboardInterrupt:
+        logger.info("Server shutdown requested")
+    except Exception as e:
+        logger.error(f"Server failed: {e}", exc_info=True)
+        raise
 
 def cli_main():
     """CLI entry point that properly handles the async main function."""
