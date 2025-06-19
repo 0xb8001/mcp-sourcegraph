@@ -310,7 +310,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
                 output_lines.append(f"Found {len(result_items)} results:")
             output_lines.append("")
             
-            for i, result in enumerate(result_items[:count], 1):
+            for i, result in enumerate(result_items[:int(count)], 1):
                 result_type = result.get("__typename", "Unknown")
                 
                 if result_type == "FileMatch":
