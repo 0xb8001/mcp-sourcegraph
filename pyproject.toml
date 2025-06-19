@@ -37,3 +37,6 @@ Issues = "https://github.com/0xb8001/mcp-sourcegraph/issues"
 
 [project.scripts]
 mcp-sourcegraph = "mcp_sourcegraph.server:cli_main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["mcp_sourcegraph"]
