@@ -323,6 +323,12 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         else:
             # More concise header with essential info
             approx_count = stats.get("approximateResultCount", len(result_items))
+            # Ensure approx_count is an integer for comparison
+            try:
+                approx_count = int(approx_count)
+            except (ValueError, TypeError):
+                approx_count = len(result_items)
+            
             if approx_count > len(result_items):
                 output_lines.append(f"Top {len(result_items)} of ~{approx_count} results:")
             else:
