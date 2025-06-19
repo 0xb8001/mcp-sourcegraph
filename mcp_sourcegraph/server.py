@@ -196,21 +196,42 @@ async def handle_list_tools() -> List[Tool]:
             description="""
 Search code across repositories using Sourcegraph's powerful search syntax.
 
-Supports various filters and modifiers:
-- Repository filtering: repo:pattern (e.g., repo:facebook/react)
-- File filtering: file:pattern (e.g., file:\.ts$)
-- Language filtering: lang:name or language:name (e.g., lang:python)
-- Content filtering: content:"pattern"
-- Case sensitivity: case:yes
-- Pattern types: Use patterntype:regexp for regex search
-- Result limits: count:N or count:all
-- And many more filters...
+## Pattern Types:
+• **Keyword search** (default): Matches individual terms anywhere in document/filename. Use "..." for exact phrases
+• **Regular expression**: Use /.../ for regex patterns or set pattern_type to "regexp"
 
-Examples:
-- repo:facebook/react useState
-- file:\.py$ import requests lang:python  
-- repo:^github\.com/microsoft/ async lang:csharp
-- type:symbol main lang:go
+## Essential Filters:
+• **repo:pattern** - Filter by repository (e.g., repo:facebook/react, repo:^github\.com/microsoft/)
+• **file:pattern** - Filter by file path (e.g., file:\.ts$, file:internal/)
+• **lang:name** - Filter by language (e.g., lang:python, lang:javascript)
+• **content:"pattern"** - Search file content with literal string
+• **type:symbol** - Search for code symbols (functions, classes, etc.)
+• **case:yes** - Enable case-sensitive search
+
+## Result Control:
+• **count:N** - Limit results (e.g., count:50, count:all for unlimited)
+• **timeout:duration** - Set timeout (e.g., timeout:30s)
+
+## Advanced Filters:
+• **-repo:pattern** - Exclude repositories
+• **-file:pattern** - Exclude files
+• **before:"date"** / **after:"date"** - Filter commits by date
+• **author:name** - Filter by commit author
+• **fork:yes** - Include repository forks
+• **archived:yes** - Include archived repositories
+
+## Boolean Operators:
+• **AND** / **and** - Both terms must match (higher precedence)
+• **OR** / **or** - Either term matches
+• **NOT** / **not** - Exclude term
+
+## Common Examples:
+• `repo:facebook/react useState` - Find useState in React repo
+• `file:\.py$ import requests lang:python` - Python files importing requests
+• `type:symbol main lang:go` - Find main functions in Go
+• `repo:^github\.com/microsoft/ async lang:csharp` - Async code in Microsoft repos
+• `"panic NOT ever" lang:go` - Go files with panic but not ever
+• `repo:sourcegraph timeout:30s count:100` - Large search with custom limits
             """.strip(),
             inputSchema={
                 "type": "object",
